@@ -1,6 +1,9 @@
 .env
 *_ledger.json
 itch_reports/
+itch_queue.json
+itch_drafts/
+itch_listings/
 __pycache__/
 *.pyc
 .pytest_cache/

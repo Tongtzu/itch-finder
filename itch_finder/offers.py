@@ -16,7 +16,7 @@ def build_stack(cluster: Cluster, niche: str) -> tuple[Offer, ...]:
     dfy_price = DFY_PREMIUM_PRICE if cluster.money_hits >= PREMIUM_MONEY_HITS else DFY_PRICE
     return (
         Offer(tier="tripwire", name=f"{topic} Fix Kit", price=TRIPWIRE_PRICE,
-              deliverable="PDF checklist + copy-paste templates/prompts solving the exact posts below",
+              deliverable="PDF checklist + copy-paste templates/prompts for the exact problems people keep posting about",
               build_time="2-4 hours",
               pitch=f"Stop fighting {kw} problems in {niche}: the 15-minute fix, step by step."),
         Offer(tier="core", name=f"{topic} Autopilot Toolkit", price=CORE_PRICE,

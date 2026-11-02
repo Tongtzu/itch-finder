@@ -5,6 +5,14 @@ Stack Exchange for problems people keep running into ("is there a tool…", "I'd
 "wasting hours on…"), scores them for pain, buying intent and urgency, groups them by topic, and
 writes a markdown report so you can decide which problems are worth solving.
 
+It covers the whole loop for one person with no audience:
+
+1. **Mine** recurring pain into topics, each with a 3-tier offer stack (`mine`).
+2. **Intercept** fresh posts where someone is asking for help right now (`intercept`).
+3. **Draft** replies you review and post yourself, by hand (`drafts`, `replied`).
+4. **Sell** under a brand name with ready-to-paste store listings (`mine --brand`).
+5. **Replicate what converts**: sales and replies per offer and source show what to copy (`status`).
+
 ## What it never does
 
 - It never posts, comments, votes or sends messages on any platform.
@@ -35,15 +43,47 @@ The report goes to `itch_reports/<niche>-<date>.md`. For each topic it lists the
 
 Optional: add `--llm` and set `OPENROUTER_API_KEY` to get a short AI-written product angle for each topic.
 
-### Tracking what you launch
+Add `--brand "Sheet Rescue"` to also write `itch_listings/<niche>-<date>.md`: one product page per
+offer, ready to paste into Gumroad, Lemon Squeezy or Payhip under that brand name. Only list what
+you can deliver, and keep the refund line to what you will honour.
+
+### Intercepting demand
+
+```bash
+# Queue posts from the last 48 hours where someone is asking for help
+python -m itch_finder intercept --niche excel --subs excel,smallbusiness
+
+# Keep checking every 30 minutes (minimum 10); Ctrl+C stops
+python -m itch_finder intercept --niche excel --subs excel --every 30
+
+# Write reply drafts for everything new (add --llm for AI-written answers)
+python -m itch_finder drafts --offer "Sheet Rescue"
+```
+
+Drafts go to `itch_drafts/<timestamp>.md`. Each one answers the question first. If you pass
+`--offer`, it adds an optional, clearly labelled disclosure line; use it only where the community's
+rules allow self-promotion. **You post every reply yourself.** After posting, mark it so `status`
+can link replies to sales:
+
+```bash
+python -m itch_finder replied reddit:abc123 --offer "Sheet Rescue"
+python -m itch_finder skip hn:456   # not worth answering
+```
+
+The queue is saved locally in `itch_queue.json` (titles, the first 600 characters of each post,
+scores and links; no usernames).
+
+### Tracking what converts
 
 ```bash
 python -m itch_finder launch "Sheet Rescue"
-python -m itch_finder sale "Sheet Rescue" 49
-python -m itch_finder status   # revenue, plus SCALE / WATCH / KILL for each offer
+python -m itch_finder sale "Sheet Rescue" 49 --source reddit
+python -m itch_finder status
 ```
 
-Sales are saved locally in `itch_finder_ledger.json`.
+`status` shows revenue, SCALE / WATCH / KILL for each offer, and sales, replies and reply-to-sale
+rate per offer and source, plus which pair to replicate next. Sales are saved locally in
+`itch_finder_ledger.json`.
 
 ## Reddit access
 

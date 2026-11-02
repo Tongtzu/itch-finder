@@ -1,4 +1,4 @@
-"""Optional: ask an LLM (via OpenRouter) for a product angle per cluster."""
+"""Optional: ask an LLM (via OpenRouter) for product angles and reply drafts."""
 import logging
 import os
 
@@ -21,27 +21,44 @@ Reply in 3 short lines:
 3. A headline of six words or fewer
 No hype and no income claims."""
 
+REPLY_PROMPT = """Someone asked this in a public {niche} community:
+Title: {title}
+Text: {body}
 
-def angle_for(cluster: Cluster, niche: str) -> str | None:
+Write a reply that actually solves it: concrete steps, plus the exact formula or code if relevant.
+Under 150 words. No links, no product mentions, no greeting. If key details are missing, give the
+most likely fix and ask one short question."""
+
+
+def _complete(prompt: str, what: str) -> str | None:
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
-        log.warning("OPENROUTER_API_KEY not set; skipping AI angles")
+        log.warning("OPENROUTER_API_KEY not set; skipping AI %s", what)
         return None
     try:
         from openai import OpenAI
     except ImportError:
-        log.warning("openai package not installed; skipping AI angles")
+        log.warning("openai package not installed; skipping AI %s", what)
         return None
-    evidence = "\n".join(f"- {s.post.title[:200]}" for s in cluster.posts[:EVIDENCE_LIMIT])
     try:
         client = OpenAI(api_key=key, base_url=OPENROUTER_BASE, timeout=TIMEOUT_S)
         resp = client.chat.completions.create(
             model=os.environ.get("PAIN_MINER_MODEL", DEFAULT_MODEL),
-            messages=[{"role": "user", "content": PROMPT.format(
-                kw=cluster.keyword, niche=niche, evidence=evidence)}],
+            messages=[{"role": "user", "content": prompt}],
             max_tokens=MAX_TOKENS,
         )
-    except Exception as exc:  # any API/network failure should only drop the angle
-        log.warning("LLM angle failed for %s: %s", cluster.keyword, exc)
+    except Exception as exc:  # any API/network failure should only drop this one output
+        log.warning("LLM %s failed: %s", what, exc)
         return None
     return (resp.choices[0].message.content or "").strip() or None
+
+
+def angle_for(cluster: Cluster, niche: str) -> str | None:
+    evidence = "\n".join(f"- {s.post.title[:200]}" for s in cluster.posts[:EVIDENCE_LIMIT])
+    return _complete(PROMPT.format(kw=cluster.keyword, niche=niche, evidence=evidence),
+                     f"angle for {cluster.keyword}")
+
+
+def reply_for(item: dict, niche: str) -> str | None:
+    return _complete(REPLY_PROMPT.format(niche=niche, title=item["title"], body=item["body"]),
+                     f"reply for {item['id']}")

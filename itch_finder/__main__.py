@@ -1,4 +1,4 @@
-"""CLI: python -m itch_finder {mine,intercept,drafts,replied,skip,launch,sale,status}."""
+"""CLI: python -m itch_finder {mine,jobs,intercept,drafts,replied,skip,launch,sale,status}."""
 import argparse
 import logging
 import math
@@ -7,7 +7,7 @@ import time
 from datetime import date, datetime
 from pathlib import Path
 
-from itch_finder import intercept, tracker
+from itch_finder import intercept, jobs, tracker
 from itch_finder.cluster import cluster
 from itch_finder.drafts import render as render_drafts
 from itch_finder.models import Post
@@ -88,6 +88,31 @@ def cmd_mine(args: argparse.Namespace) -> int:
         listings = LISTING_DIR / f"{_slug(args.niche)}-{today}.md"
         listings.write_text(render_listings(args.brand, args.niche, today, stacks), encoding="utf-8")
         print(f"Store listings: {listings.resolve()}")
+    return 0
+
+
+def cmd_jobs(args: argparse.Namespace) -> int:
+    ads = []
+    for name in args.files:
+        path = Path(name)
+        if not path.is_file():
+            raise ValueError(f"file not found: {name}")
+        ads += jobs.parse_ads(path.read_text(encoding="utf-8", errors="replace"), path.stem)
+    if not ads:
+        print("No ads found. Separate pasted ads with a line of --- and try again.")
+        return 1
+
+    today = date.today().isoformat()
+    exclude = frozenset(args.niche.lower().split())
+    REPORT_DIR.mkdir(exist_ok=True)
+    out = REPORT_DIR / f"jobs-{_slug(args.niche)}-{today}.md"
+    out.write_text(jobs.render(args.niche, today, ads, exclude), encoding="utf-8")
+
+    print(f"{len(ads)} ads read")
+    for r in jobs.needs(ads):
+        verdict = "deliverable" if r["deliverable"] else "needs a hire"
+        print(f"  {r['need']:<30} {r['ads']:>3} ads  {r['share']:>4.0%}  {verdict}")
+    print(f"Report: {out.resolve()}")
     return 0
 
 
@@ -214,6 +239,11 @@ def build_parser() -> argparse.ArgumentParser:
     mine.add_argument("--llm", action="store_true", help="add AI angles (needs OPENROUTER_API_KEY)")
     mine.add_argument("--brand", default="", help="also write store listings under this brand name")
     mine.set_defaults(func=cmd_mine)
+
+    jobs_p = sub.add_parser("jobs", help="mine job ads you pasted into text files (no scraping)")
+    jobs_p.add_argument("files", nargs="+", help="text files of ads separated by --- lines")
+    jobs_p.add_argument("--niche", required=True, help='e.g. "ai engineer"')
+    jobs_p.set_defaults(func=cmd_jobs)
 
     icpt = sub.add_parser("intercept", help="queue fresh posts asking for help, to answer first")
     _add_source_args(icpt)

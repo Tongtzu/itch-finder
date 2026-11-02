@@ -38,3 +38,38 @@ def test_sales_needed_rounds_up():
     assert sales_needed(400, 197) == 3
     assert sales_needed(400, 19) == 22
     assert sales_needed(0, 19) == 0
+
+
+def test_cluster_labels_with_shared_phrase():
+    posts = [scored("Pivot table refresh is frustrating"),
+             scored("Struggling with pivot table refresh again"),
+             scored("Pivot table totals wrong, frustrated")]
+    top = cluster(posts, top_n=3)[0]
+    assert top.keyword == "pivot table"
+    assert len(top.posts) == 3
+
+
+def test_cluster_drops_terms_seen_in_only_one_post():
+    posts = [scored("Frustrated with invoice reconciliation"),
+             scored("Struggling with payroll exports")]
+    assert cluster(posts, top_n=5) == []
+
+
+def test_cluster_skips_terms_overlapping_a_chosen_label():
+    posts = [scored("Pivot table refresh is frustrating"),
+             scored("Struggling with pivot table refresh again")]
+    labels = [c.keyword for c in cluster(posts, top_n=5)]
+    assert labels.count("pivot table") + labels.count("pivot") + labels.count("table") == 1
+
+
+def test_cluster_ignores_filler_words():
+    posts = [scored("Frustrated, figured out part of it as well"),
+             scored("Struggling, worked out part of it as well")]
+    assert cluster(posts, top_n=5) == []
+
+
+def test_cluster_drops_groups_left_with_one_post():
+    posts = [scored("Pivot table refresh is frustrating"),
+             scored("Struggling with pivot table refresh"),
+             scored("Refresh macro is frustrating")]
+    assert [c.keyword for c in cluster(posts, top_n=5)] == ["pivot table"]

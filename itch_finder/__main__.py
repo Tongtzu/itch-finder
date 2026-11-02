@@ -33,7 +33,7 @@ def cmd_mine(args: argparse.Namespace) -> int:
         posts += fetch_reddit(subs, REDDIT_QUERIES, args.days)
     if not args.no_hn:
         print("Mining Hacker News...")
-        posts += fetch_hn((f"{args.niche} {t}" for t in HN_TERMS), args.days)
+        posts += fetch_hn((f"{args.niche} {t}" for t in HN_TERMS), args.days, args.niche)
     se_sites = _csv(args.se_sites)
     if se_sites:
         print(f"Mining Stack Exchange ({', '.join(se_sites)})...")

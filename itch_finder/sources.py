@@ -27,6 +27,11 @@ SE_PAGE_SIZE = 100
 
 _TAG = re.compile(r"<[^>]+>")
 _SPACE = re.compile(r"\s+")
+# Recurring HN threads where keyword hits are job ads or status updates, not pain.
+_HN_MEGATHREAD = re.compile(
+    r"^(ask hn: )?(who is hiring|who wants to be hired|freelancer\? seeking freelancer"
+    r"|what are you working on)", re.IGNORECASE)
+_HN_MAKER_POST = re.compile(r"^(show|launch) hn\b", re.IGNORECASE)
 
 
 def _clean(raw: str | None) -> str:
@@ -50,12 +55,26 @@ def parse_reddit(payload: dict) -> list[Post]:
     return posts
 
 
-def parse_hn(payload: dict) -> list[Post]:
+def _hn_noise(hit: dict) -> bool:
+    """Link-only news, maker launches and megathread comments carry no buyer pain."""
+    if hit.get("comment_text"):
+        return bool(_HN_MEGATHREAD.match(hit.get("story_title") or ""))
+    return not hit.get("story_text") or bool(_HN_MAKER_POST.match(hit.get("title") or ""))
+
+
+def parse_hn(payload: dict, must_mention: str | None = None) -> list[Post]:
+    """must_mention: keep only hits whose own text names it (a comment's parent title doesn't count)."""
+    needle = (must_mention or "").lower()
     posts = []
     for h in (payload or {}).get("hits") or []:
+        if _hn_noise(h):
+            continue
         title = h.get("title") or h.get("story_title") or ""
         body = _clean(h.get("story_text") or h.get("comment_text"))
         if not (title.strip() or body):
+            continue
+        own_text = body if h.get("comment_text") else f"{title} {body}"
+        if needle not in own_text.lower():
             continue
         posts.append(Post(
             source="hn", post_id=str(h.get("objectID", "")), title=title, body=body,
@@ -162,14 +181,15 @@ def fetch_stackexchange(sites: Iterable[str], queries: Iterable[str],
     return posts
 
 
-def fetch_hn(queries: Iterable[str], days: int = LOOKBACK_DAYS) -> list[Post]:
+def fetch_hn(queries: Iterable[str], days: int = LOOKBACK_DAYS,
+             must_mention: str | None = None) -> list[Post]:
     session, posts = _session(), []
     since = int(time.time()) - days * 86400
     for q in queries:
         _, payload = _get_json(session, HN_URL, {
             "query": q, "tags": "(story,comment)", "hitsPerPage": PAGE_SIZE,
             "numericFilters": f"created_at_i>{since}"})
-        posts.extend(parse_hn(payload or {}))
+        posts.extend(parse_hn(payload or {}, must_mention))
         time.sleep(REQUEST_DELAY_S / 2)
     return posts
 

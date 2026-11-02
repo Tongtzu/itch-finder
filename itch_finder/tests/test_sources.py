@@ -74,3 +74,33 @@ def test_parse_hn_strips_html_and_uses_story_title_for_comments():
     assert posts[1].body == "I'd pay for this"
     assert posts[1].comments == 0
     assert posts[1].url == "https://news.ycombinator.com/item?id=2"
+
+
+HN_NOISE_FIXTURE = {
+    "hits": [
+        {"objectID": "10", "title": None, "story_title": "Ask HN: Who is hiring? (October 2026)",
+         "comment_text": "Hiring: Excel wizard, frustrating legacy sheets", "created_at_i": 1},
+        {"objectID": "11", "title": "Xorg-server 26.1.0 rc1", "story_text": None,
+         "url": "https://example.com", "created_at_i": 1},
+        {"objectID": "12", "title": "Show HN: I built an Excel thing", "story_text": "<p>Try it</p>",
+         "created_at_i": 1},
+        {"objectID": "13", "title": "Ask HN: Excel reports eat my week", "story_text": "<p>Ugh</p>",
+         "created_at_i": 1},
+    ]
+}
+
+
+def test_parse_hn_drops_megathreads_link_stories_and_maker_posts():
+    posts = parse_hn(HN_NOISE_FIXTURE)
+    assert [p.post_id for p in posts] == ["13"]
+
+
+def test_parse_hn_must_mention_checks_comment_body_not_story_title():
+    payload = {"hits": [
+        {"objectID": "20", "title": None, "story_title": "Excel is dead",
+         "comment_text": "AI payoff is zero", "created_at_i": 1},
+        {"objectID": "21", "title": None, "story_title": "Unrelated",
+         "comment_text": "I'd pay to stop fixing EXCEL macros", "created_at_i": 1},
+    ]}
+    posts = parse_hn(payload, must_mention="excel")
+    assert [p.post_id for p in posts] == ["21"]

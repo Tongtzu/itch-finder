@@ -47,6 +47,26 @@ Add `--brand "Sheet Rescue"` to also write `itch_listings/<niche>-<date>.md`: on
 offer, ready to paste into Gumroad, Lemon Squeezy or Payhip under that brand name. Only list what
 you can deliver, and keep the refund line to what you will honour.
 
+### Mining job ads (pasted by hand)
+
+Job boards such as SEEK forbid scrapers and bots, so Itch Finder never fetches them. Copy the ads
+yourself into a text file, separated by a line of `---` (a copied SEEK results page also works; it
+splits on the "Listed … ago" lines), then:
+
+```bash
+python -m itch_finder jobs ads.txt --niche "ai engineer"
+```
+
+It writes `itch_reports/jobs-<niche>-<date>.md`. The report shows:
+
+- **Needs:** how many ads ask for each need (AI agents, RAG, Azure/Copilot, governance and so on),
+  and whether each one can be delivered as a remote product or needs a hire.
+- **Hiring-only requirements:** clearances, office days and permanent roles.
+- **Recurring terms** across the ads.
+- **Draft offers** for the top deliverable need.
+
+Recruiter names ("Recruited by …") are dropped.
+
 ### Intercepting demand
 
 ```bash

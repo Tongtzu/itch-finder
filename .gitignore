@@ -1,0 +1,6 @@
+.env
+*_ledger.json
+itch_reports/
+__pycache__/
+*.pyc
+.pytest_cache/

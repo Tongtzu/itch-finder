@@ -2,6 +2,7 @@
 import argparse
 import logging
 import math
+import os
 import sys
 import time
 from datetime import date, datetime
@@ -10,6 +11,7 @@ from pathlib import Path
 from itch_finder import intercept, jobs, tracker
 from itch_finder.cluster import cluster
 from itch_finder.drafts import render as render_drafts
+from itch_finder.free_sources import GITHUB_QUERY, fetch_alerts, fetch_bluesky, fetch_github
 from itch_finder.models import Post
 from itch_finder.offers import build_stack
 from itch_finder.report import render
@@ -23,7 +25,7 @@ HN_TERMS = ("frustrating", "pay for", "is there a tool", "struggling", "hate")
 DEFAULT_TOP = 5
 DEFAULT_MIN_SCORE = 2.0
 DEFAULT_DAYS = 90
-DEFAULT_SE_SITES = "superuser,stackoverflow"
+DEFAULT_SE_SITES = "superuser,stackoverflow,softwarerecs"
 DEFAULT_HOURS = 48
 DEFAULT_INTERCEPT_MIN_SCORE = 1.0  # asks_for_help already filters; don't drop real questions
 MIN_EVERY_MINUTES = 10  # polite polling floor for the public APIs
@@ -38,9 +40,19 @@ def _csv(value: str) -> list[str]:
     return [v.strip() for v in value.split(",") if v.strip()]
 
 
-def _gather(niche: str, subs: list[str], se_sites: list[str], use_hn: bool,
-            days: int) -> list[Post]:
+def _gather(niche: str, subs: list[str], se_sites: list[str], use_hn: bool, days: int,
+            feeds: list[str] = (), use_github: bool = False,
+            use_bluesky: bool = False) -> list[Post]:
     posts = []
+    if feeds:
+        print(f"Reading {len(feeds)} Google Alerts feed(s)...")
+        posts += fetch_alerts(feeds, days)
+    if use_github:
+        print("Mining GitHub issues (research only)...")
+        posts += fetch_github([GITHUB_QUERY.format(niche=niche)], days)
+    if use_bluesky:
+        print("Mining Bluesky...")
+        posts += fetch_bluesky((f"{niche} {t}" for t in HN_TERMS), days)
     if subs:
         print(f"Mining r/{', r/'.join(subs)} ({len(subs) * len(REDDIT_QUERIES)} searches)...")
         posts += fetch_reddit(subs, REDDIT_QUERIES, days)
@@ -59,7 +71,7 @@ def _slug(niche: str) -> str:
 
 def cmd_mine(args: argparse.Namespace) -> int:
     subs = _csv(args.subs)
-    posts = _gather(args.niche, subs, _csv(args.se_sites), not args.no_hn, args.days)
+    posts = _gather_args(args, args.days)
     if not posts:
         print("No posts fetched (blocked, offline, or empty niche). See warnings above.")
         return 1
@@ -117,7 +129,7 @@ def cmd_jobs(args: argparse.Namespace) -> int:
 
 
 def _intercept_once(args: argparse.Namespace, days: int) -> None:
-    posts = _gather(args.niche, _csv(args.subs), _csv(args.se_sites), not args.no_hn, days)
+    posts = _gather_args(args, days)
     now = time.time()
     scored = qualifying(posts, args.min_score)
     queue, added = intercept.add_fresh(intercept.expire(intercept.load(), now), scored,
@@ -226,6 +238,16 @@ def _add_source_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--no-hn", action="store_true", help="skip Hacker News")
     p.add_argument("--se-sites", default=DEFAULT_SE_SITES,
                    help="comma-separated Stack Exchange sites ('' to skip)")
+    p.add_argument("--feeds", default=os.environ.get("ITCH_FEEDS", ""),
+                   help="comma-separated Google Alerts RSS feed URLs (or set ITCH_FEEDS)")
+    p.add_argument("--github", action="store_true", help="also mine GitHub issues (research only)")
+    p.add_argument("--bluesky", action="store_true",
+                   help="also mine Bluesky (needs BLUESKY_HANDLE and BLUESKY_APP_PASSWORD)")
+
+
+def _gather_args(args: argparse.Namespace, days: int) -> list[Post]:
+    return _gather(args.niche, _csv(args.subs), _csv(args.se_sites), not args.no_hn, days,
+                   _csv(args.feeds), args.github, args.bluesky)
 
 
 def build_parser() -> argparse.ArgumentParser:

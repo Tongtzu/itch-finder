@@ -14,6 +14,8 @@ DAY_S = 86400
 STATUSES = frozenset({"new", "drafted", "replied", "skipped"})
 TRACKING_FIELDS = ("id", "source", "status", "offer", "found_at")  # no post text
 QUESTION_SOURCES = frozenset({"stackexchange"})  # every post there is already a question
+# GitHub forbids using its data to contact users, and alert hits are web pages, not people asking.
+RESEARCH_ONLY_SOURCES = frozenset({"github", "google_alerts"})
 ASKS_FOR_HELP = re.compile(
     r"\b(is there (a|an|any)|how (do|can|would|should) (i|we|you)|anyone (know|have|else)"
     r"|looking for (a|an)|any (recommendations|suggestions|ideas)|recommend (a|an)|need help"
@@ -73,7 +75,8 @@ def add_fresh(queue: dict, scored: Iterable[ScoredPost], since: float, niche: st
     added = []
     for sp in scored:
         item = _item(sp, niche, now)
-        if item["id"] in known or sp.post.created_utc <= since or not asks_for_help(sp):
+        if (item["id"] in known or sp.post.created_utc <= since or not asks_for_help(sp)
+                or sp.post.source in RESEARCH_ONLY_SOURCES):
             continue
         known.add(item["id"])
         added.append(item)

@@ -12,6 +12,8 @@ EVIDENCE_LIMIT = 8
 # Reddit's Responsible Builder Policy bars sharing its data or using it to train models, so
 # Reddit text is never sent to a third-party LLM.
 NO_AI_SOURCES = frozenset({"reddit"})
+# Stack Overflow and many Stack Exchange sites ban AI-generated answers, so you write those yourself.
+NO_AI_REPLY_SOURCES = NO_AI_SOURCES | {"stackexchange"}
 MAX_TOKENS = 300
 TIMEOUT_S = 30
 
@@ -67,8 +69,8 @@ def angle_for(cluster: Cluster, niche: str) -> str | None:
 
 
 def reply_for(item: dict, niche: str) -> str | None:
-    if item.get("source") in NO_AI_SOURCES:
-        log.info("No AI reply for %s: Reddit text is not sent to an LLM", item["id"])
+    if item.get("source") in NO_AI_REPLY_SOURCES:
+        log.info("No AI reply for %s: that site's rules need a human-written answer", item["id"])
         return None
     return _complete(REPLY_PROMPT.format(niche=niche, title=item["title"], body=item["body"]),
                      f"reply for {item['id']}")

@@ -39,6 +39,35 @@ python -m itch_finder mine --niche excel --se-sites stackoverflow
 python -m itch_finder mine --niche excel --subs excel,smallbusiness --days 90
 ```
 
+### Sources (all free)
+
+Each source's terms were checked on 3 November 2026. Each one comes with its own rules, shown
+in the last column.
+
+| Source | Flag | Needs | Rules Itch Finder follows |
+|---|---|---|---|
+| Hacker News | on by default (`--no-hn` to skip) | nothing | read-only |
+| Stack Exchange: Super User, Stack Overflow, **Software Recommendations** | `--se-sites` | nothing | no AI-written replies (many sites ban them); content is linked to its source |
+| **Google Alerts** | `--feeds URL,URL` or `ITCH_FEEDS` | your own alerts, set to deliver by RSS | research only: hits are web pages, not people to reply to |
+| **GitHub issues** | `--github` | optional `GITHUB_TOKEN` (raises the rate limit) | research only: GitHub forbids using its data to contact users |
+| **Bluesky** | `--bluesky` | free account: `BLUESKY_HANDLE`, `BLUESKY_APP_PASSWORD` | read-only search; replies typed by a person; links use the account id, not the handle |
+| Reddit | `--subs` | approved API access (see below) | see "Reddit access" |
+
+Considered and left out:
+- **Adzuna:** commercial analysis and lead generation need a paid licence, and contacting employers
+  is banned.
+- **YouTube comments:** the API policy bans aggregating comment data.
+
+```bash
+# Example: every free source at once
+python -m itch_finder mine --niche excel --github --bluesky \
+  --feeds "https://www.google.com/alerts/feeds/<your-id>/<alert-id>"
+```
+
+To make a Google Alerts feed, go to google.com/alerts, create an alert (for example
+`"is there a tool" excel`), open **Show options**, set **Deliver to** to **RSS feed**, then copy
+the feed link from the alerts list.
+
 The report goes to `itch_reports/<niche>-<date>.md`. For each topic it lists the evidence posts
 (with links) and a three-tier offer idea: a quick-fix kit, a toolkit and a done-for-you service.
 

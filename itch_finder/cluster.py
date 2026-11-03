@@ -27,6 +27,8 @@ start started end ended point put take taken run running issue issues problem pr
 out well part add currently case those these once own build built instead involve often
 too such may might again already always never via per yet ago etc figured
 better useful knowledge reason read though answer answers
+feature features request requests nice user users change changes option options allow allows
+support supported version versions setting settings enable enabled default
 """.split())
 MIN_POSTS = 2  # a pain has to recur to be worth an offer
 PHRASE_BOOST = 2  # a shared two-word phrase names the pain better than either word alone

@@ -9,6 +9,9 @@ log = logging.getLogger(__name__)
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "google/gemini-2.0-flash-001"
 EVIDENCE_LIMIT = 8
+# Reddit's Responsible Builder Policy bars sharing its data or using it to train models, so
+# Reddit text is never sent to a third-party LLM.
+NO_AI_SOURCES = frozenset({"reddit"})
 MAX_TOKENS = 300
 TIMEOUT_S = 30
 
@@ -54,11 +57,18 @@ def _complete(prompt: str, what: str) -> str | None:
 
 
 def angle_for(cluster: Cluster, niche: str) -> str | None:
-    evidence = "\n".join(f"- {s.post.title[:200]}" for s in cluster.posts[:EVIDENCE_LIMIT])
+    shareable = [s for s in cluster.posts if s.post.source not in NO_AI_SOURCES]
+    if not shareable:
+        log.info("No AI angle for %s: its evidence is all from Reddit", cluster.keyword)
+        return None
+    evidence = "\n".join(f"- {s.post.title[:200]}" for s in shareable[:EVIDENCE_LIMIT])
     return _complete(PROMPT.format(kw=cluster.keyword, niche=niche, evidence=evidence),
                      f"angle for {cluster.keyword}")
 
 
 def reply_for(item: dict, niche: str) -> str | None:
+    if item.get("source") in NO_AI_SOURCES:
+        log.info("No AI reply for %s: Reddit text is not sent to an LLM", item["id"])
+        return None
     return _complete(REPLY_PROMPT.format(niche=niche, title=item["title"], body=item["body"]),
                      f"reply for {item['id']}")

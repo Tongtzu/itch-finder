@@ -19,18 +19,49 @@ def test_parse_stackexchange_unescapes_and_skips_empty():
     assert posts[0].comments == 2
 
 
+def _reddit_env(monkeypatch, allowed="a,b"):
+    monkeypatch.setenv("REDDIT_CLIENT_ID", "id")
+    monkeypatch.setenv("REDDIT_CLIENT_SECRET", "secret")
+    monkeypatch.setenv("REDDIT_USERNAME", "builder")
+    monkeypatch.setenv("REDDIT_ALLOWED_SUBS", allowed)
+    monkeypatch.setattr(sources, "_reddit_oauth", lambda session, cid, secret: True)
+    monkeypatch.setattr(sources.time, "sleep", lambda _: None)
+
+
 def test_fetch_reddit_stops_after_block(monkeypatch):
     calls = []
 
     def fake_get_json(session, url, params):
-        calls.append(url)
+        calls.append((url, session.headers["User-Agent"]))
         return 403, None
 
-    monkeypatch.delenv("REDDIT_CLIENT_ID", raising=False)
+    _reddit_env(monkeypatch)
     monkeypatch.setattr(sources, "_get_json", fake_get_json)
-    monkeypatch.setattr(sources.time, "sleep", lambda _: None)
     assert sources.fetch_reddit(["a", "b"], ["q1", "q2"]) == []
-    assert len(calls) == 1
+    assert calls == [("https://oauth.reddit.com/r/a/search",
+                      f"python:itch-finder:v{sources.VERSION} (by /u/builder)")]
+
+
+def test_fetch_reddit_without_approved_credentials_makes_no_requests(monkeypatch):
+    for name in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME"):
+        monkeypatch.delenv(name, raising=False)
+
+    def no_network(*_args, **_kwargs):
+        raise AssertionError("Reddit must not be contacted without approved credentials")
+
+    monkeypatch.setattr(sources, "_get_json", no_network)
+    monkeypatch.setattr(sources, "_reddit_oauth", no_network)
+    assert sources.fetch_reddit(["excel"], ["q"]) == []
+
+
+def test_fetch_reddit_refuses_undeclared_subreddits(monkeypatch):
+    import pytest
+
+    _reddit_env(monkeypatch, allowed="excel, r/smallbusiness")
+    monkeypatch.setattr(sources, "_get_json", lambda *a: (200, {}))
+    assert sources.allowed_subreddits() == {"excel", "smallbusiness"}
+    with pytest.raises(ValueError, match="r/accounting not in REDDIT_ALLOWED_SUBS"):
+        sources.fetch_reddit(["Excel", "accounting"], ["q"])
 
 REDDIT_FIXTURE = {
     "data": {"children": [

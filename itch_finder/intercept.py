@@ -9,7 +9,10 @@ from itch_finder.models import ScoredPost
 
 DEFAULT_QUEUE = Path("itch_queue.json")
 BODY_KEEP = 600  # enough context to write a reply; the full post stays on the platform
+RETENTION_DAYS = 30  # keep platform text only as long as it's useful for replying
+DAY_S = 86400
 STATUSES = frozenset({"new", "drafted", "replied", "skipped"})
+TRACKING_FIELDS = ("id", "source", "status", "offer", "found_at")  # no post text
 QUESTION_SOURCES = frozenset({"stackexchange"})  # every post there is already a question
 ASKS_FOR_HELP = re.compile(
     r"\b(is there (a|an|any)|how (do|can|would|should) (i|we|you)|anyone (know|have|else)"
@@ -35,6 +38,18 @@ def load(path: Path = DEFAULT_QUEUE) -> dict:
     except (OSError, ValueError) as exc:
         raise ValueError(f"Queue {path} is unreadable: {exc}") from exc
     return {"items": list(data.get("items", []))}
+
+
+def expire(queue: dict, now: float, days: int = RETENTION_DAYS) -> dict:
+    """Drop items older than `days`; replied ones keep only the fields conversion tracking needs."""
+    cutoff = now - days * DAY_S
+    kept = []
+    for item in queue["items"]:
+        if item.get("found_at", now) >= cutoff:
+            kept.append(item)
+        elif item.get("status") == "replied":
+            kept.append({k: item.get(k) for k in TRACKING_FIELDS})
+    return {**queue, "items": kept}
 
 
 def save(queue: dict, path: Path = DEFAULT_QUEUE) -> None:

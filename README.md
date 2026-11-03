@@ -17,7 +17,8 @@ It covers the whole loop for one person with no audience:
 
 - It never posts, comments, votes or sends messages on any platform.
 - It never stores usernames. It keeps only post titles, post text, scores and links.
-- It doesn't train AI models on platform content.
+- It doesn't train AI models on platform content, and it never sends Reddit text to an LLM.
+- It reads Reddit only through the approved API, never Reddit's public web pages.
 - It stays within rate limits: requests are spaced out, and it stops at the first 401/403/429 response.
 
 ## Install
@@ -107,14 +108,34 @@ rate per offer and source, plus which pair to replicate next. Sales are saved lo
 
 ## Reddit access
 
-Create a **script** app at <https://www.reddit.com/prefs/apps>, then add the keys to a `.env` file:
+Reddit is used **only through its official API, and only after Reddit approves the app** under its
+[Responsible Builder Policy](https://support.reddithelp.com/hc/en-us/articles/42728983564564-Responsible-Builder-Policy).
+Without approved credentials, Itch Finder skips Reddit entirely. It never reads Reddit's public
+web pages.
+
+Once approved, add the keys to a `.env` file:
 
 ```
 REDDIT_CLIENT_ID=...
 REDDIT_CLIENT_SECRET=...
+REDDIT_USERNAME=your_reddit_username
+REDDIT_ALLOWED_SUBS=excel,smallbusiness,accounting
 ```
 
-Itch Finder uses app-only OAuth (`client_credentials`) with read-only search requests.
+How it follows the policy:
+
+- **Declared scope only:** it queries only the subreddits in `REDDIT_ALLOWED_SUBS`, which should
+  match the application. Any other subreddit is refused with an error.
+- **Read-only:** it uses app-only OAuth (`client_credentials`) for search requests. It never posts,
+  comments, votes or sends messages, and drafted replies are posted by a person, by hand.
+- **Transparent:** every request identifies itself as `python:itch-finder:v<version> (by /u/<username>)`.
+- **Within limits:** about 30 requests a minute (Reddit allows 100), and it stops at the first
+  401, 403 or 429 response.
+- **No AI use of Reddit data:** Reddit text is never sent to an LLM. `--llm` angles and replies
+  use only Hacker News and Stack Exchange posts, and nothing is used to train models.
+- **No resale or sharing:** reports stay on your machine. No usernames are stored.
+- **Short retention:** queued posts are deleted after 30 days. Posts you replied to keep only their
+  id, status and offer, for conversion tracking.
 
 ## Tests
 

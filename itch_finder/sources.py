@@ -12,8 +12,8 @@ from itch_finder.models import Post
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "itch-finder/0.1 (public market-research script)"
-REDDIT_URL = "https://www.reddit.com/r/{sub}/search.json"
+VERSION = "0.3"
+USER_AGENT = f"python:itch-finder:v{VERSION} (read-only market research)"
 REDDIT_OAUTH_URL = "https://oauth.reddit.com/r/{sub}/search"
 REDDIT_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 HN_URL = "https://hn.algolia.com/api/v1/search_by_date"
@@ -116,18 +116,35 @@ def _get_json(session: requests.Session, url: str, params: dict) -> tuple[int, d
         return 200, None
 
 
-def _session() -> requests.Session:
+def _session(user_agent: str = USER_AGENT) -> requests.Session:
     s = requests.Session()
-    s.headers["User-Agent"] = USER_AGENT
+    s.headers["User-Agent"] = user_agent
     return s
 
 
-def _reddit_oauth(session: requests.Session) -> bool:
-    """Use an app-only OAuth token when REDDIT_CLIENT_ID/SECRET are set."""
-    client_id = os.environ.get("REDDIT_CLIENT_ID")
-    secret = os.environ.get("REDDIT_CLIENT_SECRET")
-    if not (client_id and secret):
-        return False
+def reddit_user_agent(username: str) -> str:
+    """Reddit's required format: <platform>:<app id>:<version> (by /u/<username>)."""
+    return f"python:itch-finder:v{VERSION} (by /u/{username})"
+
+
+def _normalise_sub(sub: str) -> str:
+    return sub.strip().lower().removeprefix("r/")
+
+
+def allowed_subreddits() -> frozenset[str]:
+    """The subreddits declared in the Reddit API application; no others are ever queried."""
+    raw = os.environ.get("REDDIT_ALLOWED_SUBS", "")
+    return frozenset(_normalise_sub(s) for s in raw.split(",") if s.strip())
+
+
+def _reddit_credentials() -> tuple[str, str, str] | None:
+    values = tuple(os.environ.get(n, "").strip()
+                   for n in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME"))
+    return values if all(values) else None
+
+
+def _reddit_oauth(session: requests.Session, client_id: str, secret: str) -> bool:
+    """Get an app-only OAuth token; Reddit data is only read through the approved API."""
     try:
         resp = session.post(REDDIT_TOKEN_URL, auth=(client_id, secret),
                             data={"grant_type": "client_credentials"}, timeout=TIMEOUT_S)
@@ -144,18 +161,30 @@ def _reddit_oauth(session: requests.Session) -> bool:
 
 def fetch_reddit(subs: Iterable[str], queries: Iterable[str],
                  days: int = LOOKBACK_DAYS) -> list[Post]:
-    session, posts = _session(), []
-    url = REDDIT_OAUTH_URL if _reddit_oauth(session) else REDDIT_URL
+    """Search subreddits through Reddit's approved OAuth API only, never the public web pages."""
+    subs = [_normalise_sub(s) for s in subs]
+    creds = _reddit_credentials()
+    if creds is None:
+        log.warning("Skipping Reddit: it needs approved API access. Once Reddit approves the "
+                    "app, set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET and REDDIT_USERNAME.")
+        return []
+    undeclared = sorted(set(subs) - allowed_subreddits())
+    if undeclared:
+        raise ValueError(f"r/{', r/'.join(undeclared)} not in REDDIT_ALLOWED_SUBS; only query "
+                         "the subreddits declared in your Reddit API application")
+    client_id, secret, username = creds
+    session, posts = _session(reddit_user_agent(username)), []
+    if not _reddit_oauth(session, client_id, secret):
+        return []
     queries = list(queries)
     for sub in subs:
         for q in queries:
-            status, payload = _get_json(session, url.format(sub=sub), {
+            status, payload = _get_json(session, REDDIT_OAUTH_URL.format(sub=sub), {
                 "q": q, "restrict_sr": 1, "sort": "new", "limit": PAGE_SIZE,
                 "t": "month" if days <= 31 else "year"})
             if status in BLOCKED_STATUSES:
-                log.warning("Reddit blocked the request. Set REDDIT_CLIENT_ID and "
-                            "REDDIT_CLIENT_SECRET (free 'script' app at "
-                            "https://www.reddit.com/prefs/apps) to enable it.")
+                log.warning("Reddit refused the request (HTTP %s); stopping Reddit for this run.",
+                            status)
                 return posts
             posts.extend(parse_reddit(payload or {}))
             time.sleep(REQUEST_DELAY_S)

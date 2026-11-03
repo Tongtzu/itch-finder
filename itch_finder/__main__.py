@@ -120,7 +120,8 @@ def _intercept_once(args: argparse.Namespace, days: int) -> None:
     posts = _gather(args.niche, _csv(args.subs), _csv(args.se_sites), not args.no_hn, days)
     now = time.time()
     scored = qualifying(posts, args.min_score)
-    queue, added = intercept.add_fresh(intercept.load(), scored, now - args.hours * 3600,
+    queue, added = intercept.add_fresh(intercept.expire(intercept.load(), now), scored,
+                                       now - args.hours * 3600,
                                        args.niche, now)
     intercept.save(queue)
     waiting = len(intercept.with_status(queue, "new"))
@@ -149,7 +150,7 @@ def cmd_intercept(args: argparse.Namespace) -> int:
 
 
 def cmd_drafts(args: argparse.Namespace) -> int:
-    queue = intercept.load()
+    queue = intercept.expire(intercept.load(), time.time())
     items = intercept.with_status(queue, "new")[:args.limit]
     if not items:
         print("Nothing new to draft. Run: python -m itch_finder intercept --niche <niche>")
